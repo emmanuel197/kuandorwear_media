@@ -58,7 +58,7 @@ export interface IStorage {
   getReviews(productId?: number): Promise<Review[]>;
   getTopReviews(limit?: number): Promise<Review[]>;
   deleteReview(id: number): Promise<boolean>;
-  
+
   // Product recommendations
   getTrendingProducts(limit?: number): Promise<Product[]>;
   getTopSellingProducts(limit?: number): Promise<Product[]>;
@@ -331,13 +331,13 @@ export class MemStorage implements IStorage {
   async createReview(review: InsertReview): Promise<Review> {
     const id = this.reviewIdCounter++;
     const createdAt = new Date();
-    
+
     // Handle case where a review doesn't have a customerId (admin-created general review)
     const reviewData = {
       ...review,
       customerId: review.customerId && review.customerId > 0 ? review.customerId : null
     };
-    
+
     const newReview: Review = {...reviewData, id, createdAt};
     this.reviews.set(id, newReview);
     return newReview;
@@ -345,11 +345,11 @@ export class MemStorage implements IStorage {
 
   async getReviews(productId?: number): Promise<Review[]> {
     let reviews = Array.from(this.reviews.values());
-    
+
     if (productId !== undefined) {
       reviews = reviews.filter(r => r.productId === productId);
     }
-    
+
     // Sort by newest first
     return reviews.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -361,18 +361,18 @@ export class MemStorage implements IStorage {
     const reviews = Array.from(this.reviews.values())
       .sort((a, b) => b.rating - a.rating)
       .slice(0, limit);
-    
+
     return reviews;
   }
-  
+
   async deleteReview(id: number): Promise<boolean> {
     return this.reviews.delete(id);
   }
-  
+
   async getTrendingProducts(limit: number = 4): Promise<Product[]> {
     // For in-memory storage, we'll simulate trending products based on highest rating
     const reviewAverages = new Map<number, { total: number, count: number }>();
-    
+
     // Calculate average ratings for each product
     Array.from(this.reviews.values()).forEach(review => {
       const current = reviewAverages.get(review.productId) || { total: 0, count: 0 };
@@ -381,7 +381,7 @@ export class MemStorage implements IStorage {
         count: current.count + 1
       });
     });
-    
+
     // Get products with their average ratings
     const productsWithRatings = Array.from(this.products.values())
       .map(product => {
@@ -395,20 +395,20 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.avgRating - a.avgRating) // Sort by rating
       .slice(0, limit)
       .map(item => item.product);
-      
+
     return productsWithRatings;
   }
-  
+
   async getTopSellingProducts(limit: number = 4): Promise<Product[]> {
     // Create a map to track product sales count
     const salesCount = new Map<number, number>();
-    
+
     // Count occurrences of products in order items
     Array.from(this.orderItems.values()).forEach(item => {
       const current = salesCount.get(item.productId) || 0;
       salesCount.set(item.productId, current + item.quantity);
     });
-    
+
     // Get products with their sales counts
     const topSellingProducts = Array.from(this.products.values())
       .map(product => {
@@ -421,7 +421,7 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.salesCount - a.salesCount) // Sort by sales count
       .slice(0, limit)
       .map(item => item.product);
-      
+
     return topSellingProducts;
   }
 
@@ -579,9 +579,9 @@ export class DatabaseStorage implements Partial<IStorage> {
       discount: products.discount,
       isActive: products.isActive
     }).from(products).where(eq(products.id, id));
-    
+
     if (!product) return undefined;
-    
+
     // Return the product with comingSoon and releaseDate properties
     return {
       ...product,
@@ -627,14 +627,14 @@ export class DatabaseStorage implements Partial<IStorage> {
     }
 
     let productList = await query;
-    
+
     // Add comingSoon property to each product
     productList = productList.map(product => ({
       ...product,
       comingSoon: false, // Default value
       releaseDate: null
     }));
-    
+
     // If comingSoon filter is specified, manually filter results in memory
     if (filters?.comingSoon !== undefined) {
       // For now, we have a dummy implementation until the DB schema is updated
@@ -642,19 +642,19 @@ export class DatabaseStorage implements Partial<IStorage> {
       // When we have real data, we'll need to remove this
       return filters.comingSoon ? [] : productList;
     }
-    
+
     return productList;
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
     // Remove comingSoon and releaseDate fields for database insertion since they don't exist in the schema yet
     const { comingSoon, releaseDate, ...dbProduct } = product as any;
-    
+
     const [newProduct] = await db
       .insert(products)
       .values(dbProduct)
       .returning();
-      
+
     // Add the comingSoon property back to the returned object
     return { 
       ...newProduct, 
@@ -667,7 +667,7 @@ export class DatabaseStorage implements Partial<IStorage> {
     try {
       // Convert camelCase property names to snake_case for DB
       const updateData: Record<string, any> = {};
-      
+
       if (product.name !== undefined) updateData.name = product.name;
       if (product.description !== undefined) updateData.description = product.description;
       if (product.price !== undefined) updateData.price = product.price;
@@ -681,19 +681,19 @@ export class DatabaseStorage implements Partial<IStorage> {
       if (product.isActive !== undefined) updateData.is_active = product.isActive;
       if (product.comingSoon !== undefined) updateData.coming_soon = product.comingSoon;
       if (product.releaseDate !== undefined) updateData.release_date = product.releaseDate;
-      
+
       // Only proceed if there are fields to update
       if (Object.keys(updateData).length === 0) {
         const existingProduct = await this.getProduct(id);
         return existingProduct; 
       }
-      
+
       const [updatedProduct] = await db
         .update(products)
         .set(updateData)
         .where(eq(products.id, id))
         .returning();
-        
+
       return updatedProduct || undefined;
     } catch (error) {
       console.error('Error updating product:', error);
@@ -707,18 +707,18 @@ export class DatabaseStorage implements Partial<IStorage> {
       await db
         .delete(supplierInventory)
         .where(eq(supplierInventory.productId, id));
-      
+
       // Delete any reviews associated with the product
       await db
         .delete(reviews)
         .where(eq(reviews.productId, id));
-      
+
       // Then delete the product itself
       const [deleted] = await db
         .delete(products)
         .where(eq(products.id, id))
         .returning();
-        
+
       return !!deleted;
     } catch (error) {
       console.error("Error in deleteProduct:", error);
@@ -888,7 +888,7 @@ export class DatabaseStorage implements Partial<IStorage> {
       ...review,
       customerId: review.customerId && review.customerId > 0 ? review.customerId : null
     };
-    
+
     const [newReview] = await db
       .insert(reviews)
       .values(reviewData)
@@ -898,11 +898,11 @@ export class DatabaseStorage implements Partial<IStorage> {
 
   async getReviews(productId?: number): Promise<Review[]> {
     let query = db.select().from(reviews);
-    
+
     if (productId !== undefined) {
       query = query.where(eq(reviews.productId, productId));
     }
-    
+
     // Order by most recent
     return await query.orderBy(desc(reviews.createdAt));
   }
@@ -915,11 +915,11 @@ export class DatabaseStorage implements Partial<IStorage> {
       .orderBy(desc(reviews.rating))
       .limit(limit);
   }
-  
+
   async deleteReview(id: number): Promise<boolean> {
     try {
       const [deleted] = await db
-        .delete(reviews)
+        .delete(reviews)```text
         .where(eq(reviews.id, id))
         .returning();
       return !!deleted;
